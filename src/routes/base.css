@@ -1,0 +1,51 @@
+@import 'tailwindcss';
+@import 'layerchart/shadcn-svelte.css';
+
+@theme {
+	--color-canvas: #071312;
+	--color-canvas-glow: #12332f;
+	--color-surface: #091b19;
+	--color-surface-raised: #122926;
+	--color-surface-muted: #0c2421;
+	--color-surface-hover: #153d32;
+	--color-surface-selected: rgb(35 82 68 / 0.26);
+	--color-surface-chart: rgb(27 66 57 / 0.22);
+	--color-border: #1b4039;
+	--color-border-subtle: #183732;
+	--color-border-row: #15322f;
+	--color-border-control: #2b514a;
+	--color-border-strong: #365950;
+	--color-foreground: #dce7e4;
+	--color-foreground-strong: #eef8f3;
+	--color-foreground-muted: #c9ded5;
+	--color-muted: #66847d;
+	--color-muted-strong: #9abbb1;
+	--color-muted-subtle: #52736c;
+	--color-primary: #70dca9;
+	--color-primary-hover: #9aefc5;
+	--color-primary-soft: #baf5d5;
+	--color-primary-foreground: #09201a;
+	--color-success: #71dbaa;
+	--color-success-surface: #103c2e;
+	--color-danger: #eb887e;
+	--color-danger-dot: #eb7165;
+	--color-danger-surface: #40231f;
+	--color-danger-control: #3b211f;
+	--color-danger-hover: #642c27;
+	--color-danger-foreground: #ffaaa0;
+	--color-danger-soft: #ffb7ad;
+	--color-danger-border: #80453f;
+	--shadow-primary-glow: 0 0 18px rgb(112 220 169 / 0.3);
+	--shadow-success-glow: 0 0 10px var(--color-success);
+	--shadow-danger-glow: 0 0 12px var(--color-danger-dot);
+	--shadow-danger-action: 0 0 16px rgb(235 113 101 / 0.22);
+}
+
+@layer base {
+	body {
+		--card-background: var(--color-surface-muted);
+		--card-foreground: var(--color-foreground-strong);
+		--card-muted: var(--color-surface-hover);
+		--primary: var(--color-primary);
+	}
+}
