@@ -22,7 +22,7 @@ Monitor local processes by TCP port in a Tauri desktop application. A user adds 
 The first working implementation is now in the repository:
 
 - `src-tauri/src/lib.rs` owns SQLite migrations, port lookup, process metrics, sampling and Tauri commands.
-- `src/App.tsx` renders the port table, realtime updates and actions; `src/MetricLineChart.tsx` renders the history charts with Recharts using the HeroUI theme.
+- `src/App.tsx` renders the port table, realtime updates and actions; `src/MetricLineChart.tsx` renders the history charts with TradingView Lightweight Charts using the HeroUI theme.
 - History is retained per monitored port for the latest 720 samples (about 24 minutes at a 2-second interval).
 - `cargo check`, `cargo test`, `bun run check`, `bun run lint` and `bun run build` are the baseline validations.
 

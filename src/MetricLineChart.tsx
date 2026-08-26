@@ -1,12 +1,14 @@
 import {
-	CartesianGrid,
-	Line,
-	LineChart,
-	ResponsiveContainer,
-	Tooltip,
-	XAxis,
-	YAxis
-} from 'recharts';
+	ColorType,
+	createChart,
+	LineSeries,
+	type AutoscaleInfo,
+	type IChartApi,
+	type ISeriesApi,
+	type Time,
+	type UTCTimestamp
+} from 'lightweight-charts';
+import { useEffect, useRef } from 'react';
 import type { ChartPoint } from './types';
 
 const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
@@ -22,55 +24,99 @@ type MetricLineChartProps = {
 };
 
 export function MetricLineChart({ points, unit }: MetricLineChartProps) {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const chartRef = useRef<IChartApi>(null);
+	const seriesRef = useRef<ISeriesApi<'Line'>>(null);
+
+	useEffect(() => {
+		if (!containerRef.current) return;
+
+		const styles = getComputedStyle(document.documentElement);
+		const color = (name: string) => styles.getPropertyValue(name).trim();
+		const formatTime = (timestamp: number) => timeFormatter.format(new Date(timestamp * 1000));
+		const chart = createChart(containerRef.current, {
+			autoSize: true,
+			// Chặn toàn bộ zoom
+			handleScale: false,
+			// Nếu muốn chặn luôn pan/scroll
+			handleScroll: false,
+			layout: {
+				background: { type: ColorType.Solid, color: 'transparent' },
+				textColor: color('--color-muted-strong'),
+				fontSize: 10,
+				attributionLogo: false
+			},
+			grid: {
+				vertLines: { visible: false },
+				horzLines: { color: color('--color-border-subtle') }
+			},
+			rightPriceScale: {
+				borderVisible: false,
+				minimumWidth: 54,
+				scaleMargins: { top: 0.1, bottom: 0.05 }
+			},
+			timeScale: {
+				borderColor: color('--color-border-subtle'),
+				timeVisible: true,
+				secondsVisible: true,
+				tickMarkFormatter: (time: Time) => formatTime(time as number)
+			},
+			localization: {
+				timeFormatter: (time: Time) => formatTime(time as number)
+			}
+		});
+		const series = chart.addSeries(LineSeries, {
+			color: color('--color-primary'),
+			lineWidth: 2,
+			lastValueVisible: false,
+			priceLineVisible: false,
+			priceFormat: {
+				type: 'custom',
+				minMove: 0.1,
+				formatter: (value: number) => `${value.toFixed(1)} ${unit}`
+			},
+			autoscaleInfoProvider: (original: () => AutoscaleInfo | null) => {
+				const info = original();
+
+				return info
+					? {
+							...info,
+							priceRange: { ...info.priceRange, minValue: 0 }
+						}
+					: null;
+			}
+		});
+
+		chartRef.current = chart;
+		seriesRef.current = series;
+
+		return () => {
+			chartRef.current = null;
+			seriesRef.current = null;
+			chart.remove();
+		};
+	}, [unit]);
+
+	useEffect(() => {
+		if (!seriesRef.current) return;
+
+		seriesRef.current.setData([
+			...new Map(
+				points.map(({ timestamp, value }) => [
+					timestamp,
+					{ time: timestamp as UTCTimestamp, value }
+				])
+			).values()
+		]);
+		chartRef.current?.timeScale().fitContent();
+	}, [points]);
+
 	return (
 		<div
 			aria-label={`Historical ${unit === '%' ? 'CPU' : 'RAM'} usage line chart`}
 			className="h-full min-h-0 w-full"
+			ref={containerRef}
 			role="img"
-		>
-			<ResponsiveContainer height="100%" width="100%">
-				<LineChart data={points} margin={{ top: 12, right: 14, bottom: 2, left: -16 }}>
-					<CartesianGrid stroke="var(--color-border-subtle)" vertical={false} />
-					<XAxis
-						axisLine={{ stroke: 'var(--color-border-subtle)' }}
-						dataKey="timestamp"
-						minTickGap={30}
-						tick={{ fill: 'var(--color-muted-strong)', fontSize: 10 }}
-						tickFormatter={(value: number) => timeFormatter.format(new Date(value * 1000))}
-						tickLine={false}
-					/>
-					<YAxis
-						axisLine={false}
-						domain={[0, 'auto']}
-						tick={{ fill: 'var(--color-muted-strong)', fontSize: 10 }}
-						tickLine={false}
-						width={54}
-					/>
-					<Tooltip
-						contentStyle={{
-							background: 'var(--color-surface-raised)',
-							border: '1px solid var(--color-border)',
-							borderRadius: 10,
-							fontSize: 11
-						}}
-						formatter={(value) => [
-							`${Number(value).toFixed(1)} ${unit}`,
-							unit === '%' ? 'CPU' : 'RAM'
-						]}
-						labelFormatter={(value) => timeFormatter.format(new Date(Number(value) * 1000))}
-					/>
-					<Line
-						activeDot={{ r: 3 }}
-						animationDuration={250}
-						dataKey="value"
-						dot={false}
-						isAnimationActive={false}
-						stroke="var(--color-primary)"
-						strokeWidth={2}
-						type="monotone"
-					/>
-				</LineChart>
-			</ResponsiveContainer>
-		</div>
+		/>
 	);
 }
