@@ -5,14 +5,14 @@
 The application has two layers:
 
 ```text
-SvelteKit/Tailwind UI
+React/Vite + HeroUI/Tailwind UI
         │ Tauri invoke/events
 Rust monitor service
         │
 SQLite + operating-system process/network APIs
 ```
 
-The Rust side owns OS inspection, sampling, persistence and process termination. The Svelte side owns presentation, user input, chart rendering and display state. Do not access OS process APIs from browser code.
+The Rust side owns OS inspection, sampling, persistence and process termination. The React side owns presentation, user input, chart rendering and display state. Do not access OS process APIs from browser code.
 
 ## Recommended Rust responsibilities
 

@@ -22,9 +22,9 @@ Monitor local processes by TCP port in a Tauri desktop application. A user adds 
 The first working implementation is now in the repository:
 
 - `src-tauri/src/lib.rs` owns SQLite migrations, port lookup, process metrics, sampling and Tauri commands.
-- `src/routes/+page.svelte` renders the port table, realtime updates, actions and inline SVG charts.
+- `src/App.tsx` renders the port table, realtime updates and actions; `src/MetricLineChart.tsx` renders the history charts with Recharts using the HeroUI theme.
 - History is retained per monitored port for the latest 720 samples (about 24 minutes at a 2-second interval).
-- `cargo check`, `cargo test`, `npm run check` and `npm run build` are the baseline validations.
+- `cargo check`, `cargo test`, `bun run check`, `bun run lint` and `bun run build` are the baseline validations.
 
 Platform-specific socket visibility and process permissions can still affect whether a PID or metric is available; those cases must stay visible as offline/error states.
 
