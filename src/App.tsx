@@ -1,21 +1,24 @@
-import {
-	Alert,
-	Button,
-	Card,
-	Input,
-	Spinner,
-	Table,
-	TextField,
-	type Selection
-} from '@heroui/react';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Check, Pencil, Plus, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type FormEvent,
+	type MouseEvent
+} from 'react';
+
 import { MetricLineChart } from './MetricLineChart';
 import type { AppMetrics, Monitor, MonitorSnapshot, Sample } from './types';
 
-const EMPTY_METRICS: AppMetrics = { cpuPercent: null, memoryBytes: null };
+const EMPTY_METRICS: AppMetrics = {
+	cpuPercent: null,
+	memoryBytes: null
+};
+
 const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
 	hour: '2-digit',
 	minute: '2-digit',
@@ -25,6 +28,7 @@ const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
 
 function formatMemory(bytes: number | null) {
 	if (bytes === null) return '—';
+
 	return bytes < 1_000_000
 		? `${Math.round(bytes / 1_000)} KB`
 		: `${(bytes / 1_000_000).toFixed(1)} MB`;
@@ -40,9 +44,21 @@ function formatTime(timestamp: number | null) {
 
 function Status({ status }: { status: string }) {
 	const online = status === 'online';
+
 	return (
-		<span className={online ? 'status status-online' : 'status status-offline'}>
-			<i aria-hidden="true" />
+		<span
+			className={[
+				'inline-flex items-center text-[10px] whitespace-nowrap',
+				online ? 'text-success' : 'text-danger'
+			].join(' ')}
+		>
+			<i
+				aria-hidden="true"
+				className={[
+					'mr-1.5 inline-block size-1.5 rounded-full',
+					online ? 'bg-success shadow-success-glow' : 'bg-danger-dot shadow-danger-glow'
+				].join(' ')}
+			/>
 			{online ? 'ONLINE' : status.toUpperCase()}
 		</span>
 	);
@@ -51,37 +67,53 @@ function Status({ status }: { status: string }) {
 export default function App() {
 	const [monitors, setMonitors] = useState<Monitor[]>([]);
 	const [history, setHistory] = useState<Sample[]>([]);
-	const [portInput, setPortInput] = useState<number | undefined>();
+	const [portInput, setPortInput] = useState('');
 	const [nameInput, setNameInput] = useState('');
 	const [selectedId, setSelectedId] = useState<number | null>(null);
+
 	const [saving, setSaving] = useState(false);
 	const [editingNameId, setEditingNameId] = useState<number | null>(null);
 	const [nameDraft, setNameDraft] = useState('');
 	const [actingId, setActingId] = useState<number | null>(null);
 	const [confirmingAction, setConfirmingAction] = useState<string | null>(null);
+
 	const [message, setMessage] = useState('');
 	const [error, setError] = useState('');
 	const [appMetrics, setAppMetrics] = useState<AppMetrics>(EMPTY_METRICS);
+
 	const selectedIdRef = useRef<number | null>(null);
 	const messageTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
 	const selected = monitors.find((monitor) => monitor.id === selectedId) ?? monitors[0] ?? null;
+
 	const onlineCount = monitors.filter((monitor) => monitor.status === 'online').length;
+
 	const cpuChartData = useMemo(
 		() =>
 			history.flatMap((sample) =>
 				sample.cpuPercent === null
 					? []
-					: [{ timestamp: sample.observedAt, value: sample.cpuPercent }]
+					: [
+							{
+								timestamp: sample.observedAt,
+								value: sample.cpuPercent
+							}
+						]
 			),
 		[history]
 	);
+
 	const ramChartData = useMemo(
 		() =>
 			history.flatMap((sample) =>
 				sample.memoryBytes === null
 					? []
-					: [{ timestamp: sample.observedAt, value: sample.memoryBytes / 1024 / 1024 }]
+					: [
+							{
+								timestamp: sample.observedAt,
+								value: sample.memoryBytes / 1024 / 1024
+							}
+						]
 			),
 		[history]
 	);
@@ -102,14 +134,22 @@ export default function App() {
 	const loadMonitors = useCallback(async () => {
 		try {
 			const rows = await invoke<Monitor[]>('list_monitored_ports');
+
 			setMonitors(rows);
+
 			const current = selectedIdRef.current;
+
 			const nextId = rows.some((monitor) => monitor.id === current)
 				? current
 				: (rows[0]?.id ?? null);
+
 			selectMonitor(nextId);
-			if (nextId === null) setHistory([]);
-			else await loadHistory(nextId);
+
+			if (nextId === null) {
+				setHistory([]);
+			} else {
+				await loadHistory(nextId);
+			}
 		} catch (cause) {
 			setError(String(cause));
 		}
@@ -123,62 +163,96 @@ export default function App() {
 
 		void (async () => {
 			await loadMonitors();
+
 			if (!active) return;
+
 			const stop = await listen<MonitorSnapshot>('monitor:update', (event) => {
 				if (!active) return;
+
 				const rows = event.payload.monitors;
+
 				setMonitors(rows);
 				setAppMetrics(event.payload.appMetrics);
+
 				const current = selectedIdRef.current;
+
 				const nextId = rows.some((monitor) => monitor.id === current)
 					? current
 					: (rows[0]?.id ?? null);
-				if (nextId !== current) selectMonitor(nextId);
-				if (nextId === null) setHistory([]);
-				else void loadHistory(nextId);
+
+				if (nextId !== current) {
+					selectMonitor(nextId);
+				}
+
+				if (nextId === null) {
+					setHistory([]);
+				} else {
+					void loadHistory(nextId);
+				}
 			});
-			if (active) unlisten = stop;
-			else stop();
+
+			if (active) {
+				unlisten = stop;
+			} else {
+				stop();
+			}
 		})();
 
 		return () => {
 			active = false;
 			unlisten?.();
-			if (messageTimer.current) clearTimeout(messageTimer.current);
+
+			if (messageTimer.current) {
+				clearTimeout(messageTimer.current);
+			}
 		};
 	}, [loadHistory, loadMonitors, selectMonitor]);
 
 	function showMessage(text: string) {
 		setMessage(text);
-		if (messageTimer.current) clearTimeout(messageTimer.current);
-		messageTimer.current = setTimeout(() => setMessage(''), 3500);
+
+		if (messageTimer.current) {
+			clearTimeout(messageTimer.current);
+		}
+
+		messageTimer.current = setTimeout(() => {
+			setMessage('');
+		}, 3500);
 	}
 
-	async function addPort(event: FormEvent) {
+	async function addPort(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (
-			!Number.isInteger(portInput) ||
-			portInput === undefined ||
-			portInput < 1 ||
-			portInput > 65535
-		) {
+
+		const port = Number(portInput);
+
+		if (!Number.isInteger(port) || port < 1 || port > 65535) {
 			setError('Port must be an integer between 1 and 65535.');
 			return;
 		}
+
 		setSaving(true);
 		setError('');
+
 		try {
 			const rows = await invoke<Monitor[]>('add_monitored_port', {
-				port: portInput,
+				port,
 				name: nameInput.trim() || null
 			});
+
 			setMonitors(rows);
-			const newId = rows.find((monitor) => monitor.port === portInput)?.id ?? selectedIdRef.current;
+
+			const newId = rows.find((monitor) => monitor.port === port)?.id ?? selectedIdRef.current;
+
 			selectMonitor(newId);
-			setPortInput(undefined);
+
+			setPortInput('');
 			setNameInput('');
-			showMessage(`Now monitoring port ${portInput}`);
-			if (newId !== null) await loadHistory(newId);
+
+			showMessage(`Now monitoring port ${port}`);
+
+			if (newId !== null) {
+				await loadHistory(newId);
+			}
 		} catch (cause) {
 			setError(String(cause));
 		} finally {
@@ -188,17 +262,25 @@ export default function App() {
 
 	async function endProcess(monitor: Monitor) {
 		if (!monitor.pid) return;
+
 		const action = `end:${monitor.id}`;
+
 		if (confirmingAction !== action) {
 			setConfirmingAction(action);
 			return;
 		}
+
 		setConfirmingAction(null);
 		setError('');
 		setActingId(monitor.id);
+
 		try {
-			await invoke('end_process', { id: monitor.id });
+			await invoke('end_process', {
+				id: monitor.id
+			});
+
 			showMessage(`End command sent to PID ${monitor.pid}`);
+
 			await loadMonitors();
 		} catch (cause) {
 			setError(String(cause));
@@ -209,20 +291,32 @@ export default function App() {
 
 	async function removeMonitor(monitor: Monitor) {
 		const action = `remove:${monitor.id}`;
+
 		if (confirmingAction !== action) {
 			setConfirmingAction(action);
 			return;
 		}
+
 		setConfirmingAction(null);
 		setError('');
 		setActingId(monitor.id);
+
 		try {
-			const rows = await invoke<Monitor[]>('remove_monitored_port', { id: monitor.id });
+			const rows = await invoke<Monitor[]>('remove_monitored_port', {
+				id: monitor.id
+			});
+
 			setMonitors(rows);
+
 			const nextId = rows[0]?.id ?? null;
+
 			selectMonitor(nextId);
-			if (nextId === null) setHistory([]);
-			else await loadHistory(nextId);
+
+			if (nextId === null) {
+				setHistory([]);
+			} else {
+				await loadHistory(nextId);
+			}
 		} catch (cause) {
 			setError(String(cause));
 		} finally {
@@ -230,7 +324,9 @@ export default function App() {
 		}
 	}
 
-	function startRename(monitor: Monitor) {
+	function startRename(event: MouseEvent, monitor: Monitor) {
+		event.stopPropagation();
+
 		setEditingNameId(monitor.id);
 		setNameDraft(monitor.name ?? monitor.processName ?? '');
 	}
@@ -240,7 +336,9 @@ export default function App() {
 			setError('Process name cannot be empty.');
 			return;
 		}
+
 		setError('');
+
 		try {
 			setMonitors(
 				await invoke<Monitor[]>('rename_monitored_port', {
@@ -248,6 +346,7 @@ export default function App() {
 					name: nameDraft.trim()
 				})
 			);
+
 			setEditingNameId(null);
 			showMessage('Process name updated');
 		} catch (cause) {
@@ -255,334 +354,474 @@ export default function App() {
 		}
 	}
 
-	function handleSelection(keys: Selection) {
-		if (keys === 'all') return;
-		const id = Number(keys.values().next().value);
-		if (!Number.isFinite(id)) return;
+	function handleRowClick(id: number) {
 		selectMonitor(id);
 		void loadHistory(id);
 	}
 
 	return (
-		<main className="min-h-screen px-4 py-7 sm:px-9 sm:py-12">
-			<div className="mx-auto w-full max-w-5xl">
-				<header className="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
-					<div>
-						<p className="eyebrow">LOCAL PROCESS OBSERVABILITY</p>
-						<h1 className="mt-2 text-4xl font-semibold tracking-tight text-foreground">
-							Port Monitor
-						</h1>
-					</div>
-					<div className="flex flex-col gap-3 text-right">
-						<div className="flex gap-5 text-xs text-muted">
+		<main className="min-h-screen bg-[radial-gradient(circle_at_70%_0%,var(--color-canvas-glow)_0,var(--color-canvas)_38rem)] px-9 py-12 max-[1050px]:px-4 max-[1050px]:py-7 max-[480px]:px-3 max-[480px]:py-5">
+			<div className="mx-auto w-full max-w-4xl">
+				<header className="flex items-start justify-between gap-6 max-[600px]:flex-col">
+					<h1 className="text-foreground-strong mb-2 font-serif text-[38px] leading-tight font-semibold tracking-[-0.04em]">
+						Port Monitor
+					</h1>
+
+					<div className="flex flex-col items-end gap-3.5 max-[600px]:w-full max-[600px]:flex-row max-[600px]:items-center max-[600px]:justify-between max-[480px]:flex-col max-[480px]:items-start">
+						<div className="flex gap-3.5 text-[9px] tracking-[0.08em] text-muted">
 							<span>
-								APP CPU <strong>{formatCpu(appMetrics.cpuPercent)}</strong>
+								APP CPU{' '}
+								<strong className="text-foreground-muted ml-1 text-[10px] font-medium">
+									{formatCpu(appMetrics.cpuPercent)}
+								</strong>
 							</span>
+
 							<span>
-								APP RAM <strong>{formatMemory(appMetrics.memoryBytes)}</strong>
+								APP RAM{' '}
+								<strong className="text-foreground-muted ml-1 text-[10px] font-medium">
+									{formatMemory(appMetrics.memoryBytes)}
+								</strong>
 							</span>
 						</div>
-						<span className="status status-online self-end">
-							<i aria-hidden="true" />
-							LIVE · every 2 seconds
-						</span>
+
+						<div className="pt-2 text-[11px] tracking-[0.1em] text-primary">
+							<span className="mr-1.5 inline-block size-1.5 rounded-full bg-success align-middle shadow-success-glow" />
+							LIVE
+							<small className="text-muted-subtle ml-1.5 tracking-normal">every 2 seconds</small>
+						</div>
 					</div>
 				</header>
 
-				<section aria-label="Overview" className="my-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+				<section
+					aria-label="Overview"
+					className="my-6 grid grid-cols-3 overflow-hidden rounded border border-border bg-surface-raised/75"
+				>
 					{[
 						['MONITORED', monitors.length, 'port records'],
 						['RUNNING', onlineCount, 'processes online'],
 						['OFFLINE', monitors.length - onlineCount, 'records retained']
 					].map(([label, value, description], index) => (
-						<Card
-							className="stat-card"
-							key={label}
-							variant={index === 1 ? 'tertiary' : 'secondary'}
+						<div
+							key={String(label)}
+							className={[
+								'flex min-w-0 items-center justify-between gap-3 px-5 py-3',
+								index > 0 ? 'border-l border-border' : '',
+								index === 1 ? 'bg-primary/10' : ''
+							].join(' ')}
 						>
-							<Card.Content className="flex items-center justify-between gap-4">
-								<div>
-									<span className="eyebrow">{label}</span>
-									<small>{description}</small>
-								</div>
-								<strong>{value}</strong>
-							</Card.Content>
-						</Card>
+							<div className="min-w-0">
+								<span className="text-foreground-strong block text-[12px] tracking-[0.12em]">
+									{label}
+								</span>
+
+								<small className="mt-1 block truncate text-[10px] text-muted">{description}</small>
+							</div>
+
+							<strong
+								className={[
+									'shrink-0 font-serif text-2xl leading-none font-medium',
+									index === 1 ? 'text-success' : 'text-foreground-strong'
+								].join(' ')}
+							>
+								{value}
+							</strong>
+						</div>
 					))}
 				</section>
 
-				<Card className="overflow-hidden p-0" variant="secondary">
-					<Card.Header className="flex flex-col gap-5 p-5 lg:flex-row lg:items-end lg:justify-between">
-						<div>
-							<p className="eyebrow">MONITORED PORTS</p>
-							<Card.Title className="mt-2 text-xl">Process list</Card.Title>
+				<section className="grid grid-cols-1 items-start gap-[18px]">
+					<div className="min-h-[420px] overflow-hidden rounded border border-border bg-surface/90">
+						<div className="flex items-center justify-between border-b border-border-subtle px-[22px] pt-[22px] pb-[18px] max-[1050px]:flex-wrap max-[1050px]:gap-4">
+							<div>
+								<p className="mb-2.5 text-[10px] tracking-[0.18em] text-primary">MONITORED PORTS</p>
+
+								<h2 className="text-foreground-strong font-serif text-xl leading-tight font-semibold">
+									Process list
+								</h2>
+							</div>
+
+							<form
+								className="flex gap-2 max-[1050px]:w-full max-[1050px]:flex-wrap"
+								onSubmit={addPort}
+							>
+								<input
+									aria-label="Port to monitor"
+									className="border-border-control bg-surface-muted placeholder:text-muted-subtle w-[165px] rounded border px-[11px] py-2.5 text-[11px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 max-[1050px]:min-w-0 max-[1050px]:flex-1 max-[480px]:w-full max-[480px]:basis-full"
+									max={65535}
+									min={1}
+									placeholder="Port, e.g. 3000"
+									type="number"
+									value={portInput}
+									onChange={(event) => setPortInput(event.target.value)}
+								/>
+
+								<input
+									aria-label="Optional name"
+									className="border-border-control bg-surface-muted placeholder:text-muted-subtle w-[145px] rounded border px-[11px] py-2.5 text-[11px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 max-[1050px]:min-w-0 max-[1050px]:flex-1 max-[480px]:w-full max-[480px]:basis-full"
+									maxLength={40}
+									placeholder="Name (optional)"
+									type="text"
+									value={nameInput}
+									onChange={(event) => setNameInput(event.target.value)}
+								/>
+
+								<button
+									className="text-primary-foreground hover:bg-primary-hover hover:shadow-primary-glow inline-flex items-center justify-center gap-1.5 rounded bg-primary px-3.5 py-2.5 text-[11px] font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 max-[480px]:w-full"
+									disabled={saving}
+									type="submit"
+								>
+									{saving ? (
+										'...'
+									) : (
+										<>
+											<Plus size={14} />
+											Add port
+										</>
+									)}
+								</button>
+							</form>
 						</div>
-						<form
-							className="grid w-full gap-2 sm:grid-cols-[150px_1fr_auto] lg:w-auto"
-							onSubmit={addPort}
-						>
-							<TextField
-								aria-label="Port to monitor"
-								name="port"
-								value={portInput?.toString() ?? ''}
-								variant="secondary"
-								onChange={(value) => setPortInput(value === '' ? undefined : Number(value))}
-							>
-								<Input max={65535} min={1} placeholder="Port, e.g. 3000" type="number" />
-							</TextField>
-							<TextField
-								aria-label="Optional name"
-								value={nameInput}
-								variant="secondary"
-								onChange={setNameInput}
-							>
-								<Input maxLength={40} placeholder="Name (optional)" />
-							</TextField>
-							<Button isPending={saving} type="submit">
-								<Plus size={16} />
-								Add port
-							</Button>
-						</form>
-					</Card.Header>
 
-					{message && (
-						<Alert className="mx-5 mb-3" status="success">
-							<Alert.Indicator />
-							<Alert.Content>
-								<Alert.Title>{message}</Alert.Title>
-							</Alert.Content>
-						</Alert>
-					)}
-					{error && (
-						<Alert className="mx-5 mb-3" status="danger">
-							<Alert.Indicator />
-							<Alert.Content>
-								<Alert.Title>{error}</Alert.Title>
-							</Alert.Content>
-						</Alert>
-					)}
-
-					<Table variant="secondary">
-						<Table.ScrollContainer>
-							<Table.Content
-								aria-label="Monitored ports"
-								className="min-w-[760px]"
-								selectedKeys={selectedId === null ? new Set() : new Set([selectedId])}
-								selectionMode="single"
-								onSelectionChange={handleSelection}
+						{message && (
+							<div
+								className="bg-success-surface mx-[22px] mt-3 rounded px-3 py-2 text-[11px] break-words text-success max-[480px]:mx-3"
+								role="status"
 							>
-								<Table.Header>
-									<Table.Column isRowHeader>PORT</Table.Column>
-									<Table.Column>NAME / PROCESS</Table.Column>
-									<Table.Column>RAM</Table.Column>
-									<Table.Column>CPU</Table.Column>
-									<Table.Column>STATUS</Table.Column>
-									<Table.Column className="text-end">ACTIONS</Table.Column>
-								</Table.Header>
-								<Table.Body>
-									{monitors.map((monitor) => (
-										<Table.Row
-											id={monitor.id}
-											key={monitor.id}
-											textValue={`${monitor.port} ${monitor.name ?? monitor.processName ?? ''}`}
-										>
-											<Table.Cell>
-												<Button size="sm" variant="ghost" onPress={() => selectMonitor(monitor.id)}>
-													{monitor.port}
-												</Button>
-											</Table.Cell>
-											<Table.Cell>
-												{editingNameId === monitor.id ? (
-													<div className="flex items-center gap-1.5">
-														<TextField
-															aria-label="New process name"
-															value={nameDraft}
-															variant="secondary"
-															onChange={setNameDraft}
+								{message}
+							</div>
+						)}
+
+						{error && (
+							<div
+								className="bg-danger-surface mx-[22px] mt-3 rounded px-3 py-2 text-[11px] break-words text-danger max-[480px]:mx-3"
+								role="alert"
+							>
+								{error}
+							</div>
+						)}
+
+						<div className="overflow-x-auto">
+							<table className="w-full min-w-[760px] border-collapse text-left">
+								<thead>
+									<tr className="text-[10px] font-normal tracking-[0.12em] text-muted">
+										<th className="border-b border-border-subtle px-3 pt-4 pb-2.5 pl-[22px] font-normal">
+											PORT
+										</th>
+
+										<th className="border-b border-border-subtle px-3 pt-4 pb-2.5 font-normal">
+											NAME / PROCESS
+										</th>
+
+										<th className="border-b border-border-subtle px-3 pt-4 pb-2.5 font-normal">
+											RAM
+										</th>
+
+										<th className="border-b border-border-subtle px-3 pt-4 pb-2.5 font-normal">
+											CPU
+										</th>
+
+										<th className="border-b border-border-subtle px-3 pt-4 pb-2.5 font-normal">
+											STATUS
+										</th>
+
+										<th className="border-b border-border-subtle px-3 pt-4 pr-[18px] pb-2.5 text-right font-normal">
+											ACTIONS
+										</th>
+									</tr>
+								</thead>
+
+								<tbody>
+									{monitors.map((monitor) => {
+										const isSelected = selected?.id === monitor.id;
+
+										return (
+											<tr
+												key={monitor.id}
+												className={[
+													'border-border-row text-foreground-muted hover:bg-surface-selected border-b text-xs transition-colors',
+													isSelected ? 'bg-surface-selected' : ''
+												].join(' ')}
+												onClick={() => handleRowClick(monitor.id)}
+											>
+												<td className="border-border-row border-b px-3 py-[15px] pl-[22px] align-middle">
+													<button
+														className="bg-transparent p-0 text-[15px] text-primary"
+														type="button"
+														onClick={(event) => {
+															event.stopPropagation();
+															handleRowClick(monitor.id);
+														}}
+													>
+														{monitor.port}
+													</button>
+												</td>
+
+												<td className="border-border-row min-w-0 border-b px-3 py-[15px] align-middle">
+													{editingNameId === monitor.id ? (
+														<form
+															className="flex items-center gap-1.5"
+															onClick={(event) => event.stopPropagation()}
+															onSubmit={(event) => {
+																event.preventDefault();
+																event.stopPropagation();
+																void saveName(monitor);
+															}}
 														>
-															<Input maxLength={40} />
-														</TextField>
-														<Button
-															isIconOnly
-															aria-label="Save process name"
-															size="sm"
-															onPress={() => void saveName(monitor)}
-														>
-															<Check size={15} />
-														</Button>
-														<Button
-															isIconOnly
-															aria-label="Cancel rename"
-															size="sm"
-															variant="tertiary"
-															onPress={() => setEditingNameId(null)}
-														>
-															<X size={15} />
-														</Button>
-													</div>
-												) : (
-													<div className="flex items-center gap-2">
-														<strong className="max-w-44 truncate">
-															{monitor.name ?? monitor.processName ?? '—'}
-														</strong>
-														<Button
-															isIconOnly
-															aria-label="Rename process"
-															size="sm"
-															variant="ghost"
-															onPress={() => startRename(monitor)}
-														>
-															<Pencil size={14} />
-														</Button>
-													</div>
-												)}
-												<small>
-													{monitor.name && monitor.processName ? `${monitor.processName} · ` : ''}
-													{monitor.pid ? `PID ${monitor.pid}` : 'No process found'}
-												</small>
-											</Table.Cell>
-											<Table.Cell>{formatMemory(monitor.memoryBytes)}</Table.Cell>
-											<Table.Cell>{formatCpu(monitor.cpuPercent)}</Table.Cell>
-											<Table.Cell>
-												<Status status={monitor.status} />
-											</Table.Cell>
-											<Table.Cell>
-												<div className="flex justify-end gap-2">
-													{monitor.pid && confirmingAction !== `remove:${monitor.id}` && (
-														<>
-															<Button
-																isDisabled={actingId === monitor.id}
-																size="sm"
-																variant="danger"
-																onPress={() => void endProcess(monitor)}
+															<input
+																aria-label="New process name"
+																autoFocus
+																className="bg-surface-muted min-w-0 flex-1 rounded border border-primary px-2 py-1.5 text-[11px] text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+																maxLength={40}
+																value={nameDraft}
+																onChange={(event) => setNameDraft(event.target.value)}
+															/>
+
+															<button
+																aria-label="Save process name"
+																className="text-primary-foreground hover:bg-primary-hover inline-flex size-7 shrink-0 items-center justify-center rounded bg-primary transition focus-visible:outline-2 focus-visible:outline-primary"
+																title="Save"
+																type="submit"
 															>
-																{actingId === monitor.id ? (
-																	<Spinner size="sm" />
-																) : confirmingAction === `end:${monitor.id}` ? (
-																	'Confirm end'
-																) : (
-																	'End'
-																)}
-															</Button>
-															{confirmingAction === `end:${monitor.id}` && (
-																<Button
-																	size="sm"
-																	variant="tertiary"
-																	onPress={() => setConfirmingAction(null)}
-																>
-																	Cancel
-																</Button>
-															)}
-														</>
-													)}
-													{confirmingAction !== `end:${monitor.id}` && (
-														<>
-															<Button
-																isDisabled={actingId === monitor.id}
-																size="sm"
-																variant={
-																	confirmingAction === `remove:${monitor.id}`
-																		? 'danger'
-																		: 'tertiary'
-																}
-																onPress={() => void removeMonitor(monitor)}
-															>
-																{actingId === monitor.id ? (
-																	<Spinner size="sm" />
-																) : confirmingAction === `remove:${monitor.id}` ? (
-																	'Confirm remove'
-																) : (
-																	'Remove'
-																)}
-															</Button>
-															{confirmingAction === `remove:${monitor.id}` && (
-																<Button
-																	size="sm"
-																	variant="ghost"
-																	onPress={() => setConfirmingAction(null)}
-																>
-																	Cancel
-																</Button>
-															)}
-														</>
-													)}
-												</div>
-											</Table.Cell>
-										</Table.Row>
-									))}
-								</Table.Body>
-							</Table.Content>
-						</Table.ScrollContainer>
-					</Table>
-					{monitors.length === 0 && (
-						<p className="px-5 py-14 text-center text-sm text-muted">
-							No monitored ports yet. Add a port above to get started.
-						</p>
-					)}
-				</Card>
+																<Check size={15} strokeWidth={2.5} />
+															</button>
 
-				<Card className="mt-5" variant="secondary">
-					{selected ? (
-						<>
-							<Card.Header className="flex-row items-start justify-between">
-								<div>
-									<p className="eyebrow">PORT DETAIL</p>
-									<Card.Title className="mt-2 text-3xl">{selected.port}</Card.Title>
-									<Card.Description>
-										{selected.name ?? selected.processName ?? 'Unnamed'}
-									</Card.Description>
+															<button
+																aria-label="Cancel rename"
+																className="border-border-strong hover:bg-danger-surface inline-flex size-7 shrink-0 items-center justify-center rounded border text-muted-strong transition hover:border-danger hover:text-danger-soft focus-visible:outline-2 focus-visible:outline-danger"
+																title="Cancel"
+																type="button"
+																onClick={() => setEditingNameId(null)}
+															>
+																<X size={15} strokeWidth={2.5} />
+															</button>
+														</form>
+													) : (
+														<div className="flex items-center gap-2">
+															<strong className="text-foreground-strong min-w-0 truncate text-xs font-medium">
+																{monitor.name ?? monitor.processName ?? '—'}
+															</strong>
+
+															<button
+																aria-label="Rename process"
+																className="hover:text-primary-soft inline-flex size-7 shrink-0 items-center justify-center rounded border border-transparent text-muted-strong transition hover:border-primary hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-primary"
+																title="Rename"
+																type="button"
+																onClick={(event) => startRename(event, monitor)}
+															>
+																<Pencil size={14} strokeWidth={2} />
+															</button>
+														</div>
+													)}
+
+													<small className="mt-1.5 block truncate text-[10px] text-muted">
+														{monitor.name && monitor.processName ? `${monitor.processName} · ` : ''}
+
+														{monitor.pid ? `PID ${monitor.pid}` : 'No process found'}
+													</small>
+												</td>
+
+												<td className="border-border-row text-foreground-muted border-b px-3 py-[15px] align-middle text-[11px] whitespace-nowrap">
+													{formatMemory(monitor.memoryBytes)}
+												</td>
+
+												<td className="border-border-row text-foreground-muted border-b px-3 py-[15px] align-middle text-[11px] whitespace-nowrap">
+													{formatCpu(monitor.cpuPercent)}
+												</td>
+
+												<td className="border-border-row border-b px-3 py-[15px] align-middle">
+													<Status status={monitor.status} />
+												</td>
+
+												<td className="border-border-row border-b px-3 py-[15px] pr-[18px] text-right align-middle">
+													<div className="flex flex-wrap justify-end gap-2">
+														{monitor.pid && confirmingAction !== `remove:${monitor.id}` && (
+															<>
+																<button
+																	className="border-danger-border bg-danger-control hover:shadow-danger-action rounded border px-3 py-2 text-[10px] font-bold tracking-[0.08em] text-danger-foreground transition hover:border-danger hover:bg-danger-hover hover:text-white focus-visible:outline-2 focus-visible:outline-danger disabled:cursor-wait disabled:opacity-60"
+																	disabled={actingId === monitor.id}
+																	type="button"
+																	onClick={(event) => {
+																		event.stopPropagation();
+
+																		void endProcess(monitor);
+																	}}
+																>
+																	{actingId === monitor.id
+																		? '...'
+																		: confirmingAction === `end:${monitor.id}`
+																			? 'CONFIRM END'
+																			: 'END'}
+																</button>
+
+																{confirmingAction === `end:${monitor.id}` && (
+																	<button
+																		className="border-border-strong hover:text-primary-soft rounded border bg-transparent px-3 py-2 text-[10px] font-bold tracking-[0.08em] text-muted-strong transition hover:border-primary"
+																		type="button"
+																		onClick={(event) => {
+																			event.stopPropagation();
+																			setConfirmingAction(null);
+																		}}
+																	>
+																		CANCEL
+																	</button>
+																)}
+															</>
+														)}
+
+														{confirmingAction !== `end:${monitor.id}` && (
+															<>
+																<button
+																	className={[
+																		'rounded border px-3 py-2 text-[10px] font-bold tracking-[0.08em] transition disabled:cursor-wait disabled:opacity-60',
+																		confirmingAction === `remove:${monitor.id}`
+																			? 'bg-danger-control border-danger text-danger-foreground'
+																			: 'border-border-strong bg-surface-muted hover:bg-danger-surface text-muted-strong hover:border-danger hover:text-danger-soft'
+																	].join(' ')}
+																	disabled={actingId === monitor.id}
+																	type="button"
+																	onClick={(event) => {
+																		event.stopPropagation();
+
+																		void removeMonitor(monitor);
+																	}}
+																>
+																	{actingId === monitor.id
+																		? '...'
+																		: confirmingAction === `remove:${monitor.id}`
+																			? 'CONFIRM REMOVE'
+																			: 'REMOVE'}
+																</button>
+
+																{confirmingAction === `remove:${monitor.id}` && (
+																	<button
+																		className="border-border-strong hover:text-primary-soft rounded border bg-transparent px-3 py-2 text-[10px] font-bold tracking-[0.08em] text-muted-strong transition hover:border-primary"
+																		type="button"
+																		onClick={(event) => {
+																			event.stopPropagation();
+																			setConfirmingAction(null);
+																		}}
+																	>
+																		CANCEL
+																	</button>
+																)}
+															</>
+														)}
+													</div>
+												</td>
+											</tr>
+										);
+									})}
+
+									{monitors.length === 0 && (
+										<tr>
+											<td className="px-5 py-[60px] text-center text-muted" colSpan={6}>
+												No monitored ports yet. Add a port above to get started.
+											</td>
+										</tr>
+									)}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<aside className="min-h-[420px] min-w-0 overflow-hidden rounded border border-border bg-surface/90 p-[22px] max-[1050px]:min-h-0 max-[480px]:p-3">
+						{selected ? (
+							<>
+								<div className="flex items-start justify-between">
+									<div>
+										<p className="mb-2.5 text-[10px] tracking-[0.18em] text-primary">PORT DETAIL</p>
+
+										<h2 className="text-foreground-strong font-serif text-[29px] leading-tight font-semibold">
+											{selected.port}
+										</h2>
+
+										<p className="mt-1.5 text-[10px] text-primary">
+											{selected.name ?? selected.processName ?? 'Unnamed'}
+										</p>
+									</div>
+
+									<Status status={selected.status} />
 								</div>
-								<Status status={selected.status} />
-							</Card.Header>
-							<Card.Content>
-							<div className="detail-grid">
-								<div>
-									<span>PROCESS</span>
-									<strong>{selected.processName ?? 'No listener found'}</strong>
-								</div>
-								<div>
-									<span>PID</span>
-									<strong>{selected.pid ?? '—'}</strong>
-								</div>
-								<div>
-									<span>LAST SAMPLE</span>
-										<strong>{formatTime(selected.observedAt)}</strong>
+
+								<div className="my-[22px] grid grid-cols-[1.2fr_0.7fr_1.4fr] gap-3 border-y border-border-subtle py-[15px]">
+									<div>
+										<span className="text-[10px] tracking-[0.12em] text-muted">PROCESS</span>
+
+										<strong className="text-foreground-muted mt-1.5 block truncate text-[11px]">
+											{selected.processName ?? 'No listener found'}
+										</strong>
+									</div>
+
+									<div>
+										<span className="text-[10px] tracking-[0.12em] text-muted">PID</span>
+
+										<strong className="text-foreground-muted mt-1.5 block truncate text-[11px]">
+											{selected.pid ?? '—'}
+										</strong>
+									</div>
+
+									<div>
+										<span className="text-[10px] tracking-[0.12em] text-muted">LAST SAMPLE</span>
+
+										<strong className="text-foreground-muted mt-1.5 block truncate text-[11px]">
+											{formatTime(selected.observedAt)}
+										</strong>
 									</div>
 								</div>
-								<div className="space-y-5">
-									<section>
-										<div className="chart-title">
-											<span>CPU USAGE</span>
-											<strong>{formatCpu(selected.cpuPercent)}</strong>
-										</div>
-										<div className="chart">
-											{/* <MetricLineChart points={cpuChartData} unit="%" /> */}
-										</div>
-										<small>X: time · Y: CPU (%)</small>
-									</section>
-									<section>
-										<div className="chart-title">
-											<span>RAM USAGE</span>
-											<strong>{formatMemory(selected.memoryBytes)}</strong>
-										</div>
-										<div className="chart">
-											{/* <MetricLineChart points={ramChartData} unit="MB" /> */}
-										</div>
-										<small>X: time · Y: RAM (MB)</small>
-									</section>
+
+								<div className="mt-5">
+									<div className="mb-2 flex items-center justify-between">
+										<span className="text-[10px] tracking-[0.12em] text-muted">CPU USAGE</span>
+
+										<strong className="text-foreground-muted text-xs font-normal">
+											{formatCpu(selected.cpuPercent)}
+										</strong>
+									</div>
+
+									<div className="h-[210px] overflow-hidden rounded bg-[linear-gradient(180deg,var(--color-surface-chart),transparent)] text-muted-strong">
+										<MetricLineChart points={cpuChartData} unit="%" />
+									</div>
+
+									<small className="text-muted-subtle mt-1 block text-[9px]">
+										X: time · Y: CPU (%)
+									</small>
 								</div>
-								<p className="mt-4 text-xs text-muted">
+
+								<div className="mt-5">
+									<div className="mb-2 flex items-center justify-between">
+										<span className="text-[10px] tracking-[0.12em] text-muted">RAM USAGE</span>
+
+										<strong className="text-foreground-muted text-xs font-normal">
+											{formatMemory(selected.memoryBytes)}
+										</strong>
+									</div>
+
+									<div className="h-[210px] overflow-hidden rounded bg-[linear-gradient(180deg,var(--color-surface-chart),transparent)] text-muted-strong">
+										<MetricLineChart points={ramChartData} unit="MB" />
+									</div>
+
+									<small className="text-muted-subtle mt-1 block text-[9px]">
+										X: time · Y: RAM (MB)
+									</small>
+								</div>
+
+								<p className="text-muted-subtle mt-[15px] text-[10px]">
 									{history.length} samples · retained by port even while the process is offline
 								</p>
-							</Card.Content>
-						</>
-					) : (
-						<Card.Content className="py-20 text-center">
-							<Card.Title>Select a port</Card.Title>
-							<Card.Description>RAM and CPU charts will appear here.</Card.Description>
-						</Card.Content>
-					)}
-				</Card>
+							</>
+						) : (
+							<div className="px-5 pt-[90px] text-center text-muted">
+								<span className="text-4xl text-primary">⌁</span>
+
+								<h2 className="text-foreground-strong my-4 font-serif text-xl font-semibold">
+									Select a port
+								</h2>
+
+								<p className="text-xs">RAM and CPU charts will appear here.</p>
+							</div>
+						)}
+					</aside>
+				</section>
 			</div>
 		</main>
 	);

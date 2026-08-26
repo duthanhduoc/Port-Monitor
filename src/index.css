@@ -1,140 +1,50 @@
 @import 'tailwindcss';
-@import '@heroui/styles';
 
 @theme {
 	--color-canvas: #071312;
 	--color-canvas-glow: #12332f;
+	--color-surface: #091b19;
 	--color-surface-raised: #122926;
+	--color-surface-muted: #0c2421;
+	--color-surface-hover: #153d32;
+	--color-surface-selected: rgb(35 82 68 / 0.26);
+	--color-surface-chart: rgb(27 66 57 / 0.22);
+	--color-border: #1b4039;
 	--color-border-subtle: #183732;
-	--color-primary: #70dca9;
+	--color-border-row: #15322f;
+	--color-border-control: #2b514a;
+	--color-border-strong: #365950;
+	--color-foreground: #dce7e4;
+	--color-foreground-strong: #eef8f3;
+	--color-foreground-muted: #c9ded5;
+	--color-muted: #66847d;
 	--color-muted-strong: #9abbb1;
-	--shadow-success-glow: 0 0 10px #71dbaa;
-	--shadow-danger-glow: 0 0 12px #eb7165;
+	--color-muted-subtle: #52736c;
+	--color-primary: #70dca9;
+	--color-primary-hover: #9aefc5;
+	--color-primary-soft: #baf5d5;
+	--color-primary-foreground: #09201a;
+	--color-success: #71dbaa;
+	--color-success-surface: #103c2e;
+	--color-danger: #eb887e;
+	--color-danger-dot: #eb7165;
+	--color-danger-surface: #40231f;
+	--color-danger-control: #3b211f;
+	--color-danger-hover: #642c27;
+	--color-danger-foreground: #ffaaa0;
+	--color-danger-soft: #ffb7ad;
+	--color-danger-border: #80453f;
+	--shadow-primary-glow: 0 0 18px rgb(112 220 169 / 0.3);
+	--shadow-success-glow: 0 0 10px var(--color-success);
+	--shadow-danger-glow: 0 0 12px var(--color-danger-dot);
+	--shadow-danger-action: 0 0 16px rgb(235 113 101 / 0.22);
 }
 
 @layer base {
-	.dark {
-		--background: #071312;
-		--foreground: #eef8f3;
-		--surface: #091b19;
-		--surface-foreground: #eef8f3;
-		--surface-secondary: #0c2421;
-		--surface-secondary-foreground: #dce7e4;
-		--surface-tertiary: #12332f;
-		--surface-tertiary-foreground: #eef8f3;
-		--overlay: #122926;
-		--overlay-foreground: #eef8f3;
-		--muted: #7c9992;
-		--default: #153d32;
-		--default-foreground: #dce7e4;
-		--accent: #70dca9;
-		--accent-foreground: #09201a;
-		--field-background: #0c2421;
-		--field-foreground: #eef8f3;
-		--field-placeholder: #66847d;
-		--field-border: #2b514a;
-		--success: #71dbaa;
-		--success-foreground: #09201a;
-		--danger: #eb7165;
-		--danger-foreground: #fff5f3;
-		--border: #1b4039;
-		--separator: #183732;
-		--focus: #70dca9;
-		--radius: 0.55rem;
-	}
-
-	* {
-		box-sizing: border-box;
-	}
-
 	body {
-		margin: 0;
-		min-width: 320px;
-		min-height: 100vh;
-		background:
-			radial-gradient(circle at 70% 0%, var(--color-canvas-glow) 0, transparent 38rem),
-			var(--color-canvas);
-		color: var(--foreground);
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-		-webkit-font-smoothing: antialiased;
-	}
-
-	button,
-	input {
-		font: inherit;
-	}
-}
-
-@layer components {
-	.eyebrow {
-		@apply text-[10px] tracking-[0.16em] text-primary;
-	}
-
-	.stat-card {
-		@apply min-w-0;
-
-		small {
-			@apply mt-1 block text-[10px] text-muted;
-		}
-
-		strong {
-			@apply text-2xl font-semibold text-foreground;
-		}
-	}
-
-	.status {
-		@apply inline-flex items-center text-[10px] font-medium tracking-[0.08em] whitespace-nowrap;
-
-		i {
-			@apply mr-2 inline-block size-1.5 rounded-full;
-		}
-	}
-
-	.status-online {
-		@apply text-success;
-
-		i {
-			@apply bg-success shadow-success-glow;
-		}
-	}
-
-	.status-offline {
-		@apply text-danger;
-
-		i {
-			@apply bg-danger shadow-danger-glow;
-		}
-	}
-
-	.table__cell small {
-		@apply mt-1 block text-[10px] text-muted;
-	}
-
-	.detail-grid {
-		@apply mb-5 grid grid-cols-1 gap-4 border-y border-separator py-4 sm:grid-cols-[1.2fr_0.7fr_1.4fr];
-
-		span {
-			@apply text-[10px] tracking-[0.12em] text-muted;
-		}
-
-		strong {
-			@apply mt-1.5 block truncate text-xs text-foreground;
-		}
-	}
-
-	.chart-title {
-		@apply mb-2 flex items-center justify-between text-[10px] tracking-[0.12em] text-muted;
-
-		strong {
-			@apply text-xs font-normal tracking-normal text-foreground;
-		}
-	}
-
-	.chart {
-		@apply h-[220px] overflow-hidden rounded-xl border border-white/5 bg-linear-to-b from-emerald-900/20 to-transparent;
-	}
-
-	.chart + small {
-		@apply mt-1 block text-[9px] text-muted;
+		--card-background: var(--color-surface-muted);
+		--card-foreground: var(--color-foreground-strong);
+		--card-muted: var(--color-surface-hover);
+		--primary: var(--color-primary);
 	}
 }
