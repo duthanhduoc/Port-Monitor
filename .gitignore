@@ -12,3 +12,4 @@ vite.config.ts.timestamp-*
 # Tauri generated/build output
 /src-tauri/target/
 /src-tauri/gen/
+/dist/

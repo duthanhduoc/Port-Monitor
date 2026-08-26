@@ -2,7 +2,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { Pencil, Plus, X } from '@lucide/svelte';
-	import { LineChart, defaultChartPadding } from 'layerchart';
+	import MetricLineChart from '$lib/MetricLineChart.svelte';
 	import { onMount } from 'svelte';
 	import './base.css';
 
@@ -31,18 +31,6 @@
 		second: '2-digit',
 		hourCycle: 'h23'
 	});
-	const chartProps = {
-		xAxis: {
-			tickLabelProps: { fill: 'var(--color-muted-strong)', fontSize: 12, stroke: 'none' }
-		},
-		yAxis: {
-			tickLabelProps: { fill: 'var(--color-muted-strong)', fontSize: 12, stroke: 'none' }
-		},
-		tooltip: {
-			root: { variant: 'default' },
-			header: { format: formatChartTime }
-		}
-	} as const;
 
 	let monitors = $state<Monitor[]>([]);
 	let history = $state<Sample[]>([]);
@@ -67,7 +55,7 @@
 		history
 			.filter((sample) => sample.cpuPercent !== null)
 			.map((sample) => ({
-				date: new Date(sample.observedAt * 1000),
+				timestamp: sample.observedAt,
 				value: sample.cpuPercent as number
 			}))
 	);
@@ -75,7 +63,7 @@
 		history
 			.filter((sample) => sample.memoryBytes !== null)
 			.map((sample) => ({
-				date: new Date(sample.observedAt * 1000),
+				timestamp: sample.observedAt,
 				value: (sample.memoryBytes as number) / 1024 / 1024
 			}))
 	);
@@ -589,15 +577,7 @@
 						<div
 							class="h-[210px] overflow-hidden rounded bg-[linear-gradient(180deg,var(--color-surface-chart),transparent)] text-muted-strong"
 						>
-							<LineChart
-								data={cpuChartData}
-								x="date"
-								y="value"
-								highlight={{ points: false, lines: true }}
-								height={210}
-								padding={defaultChartPadding({ top: 10, right: 12, bottom: 28, left: 46 })}
-								props={chartProps}
-							/>
+							<MetricLineChart points={cpuChartData} unit="%" />
 						</div>
 						<small class="mt-1 block text-[9px] text-muted-subtle">X: time · Y: CPU (%)</small>
 					</div>
@@ -611,15 +591,7 @@
 						<div
 							class="h-[210px] overflow-hidden rounded bg-[linear-gradient(180deg,var(--color-surface-chart),transparent)] text-muted-strong"
 						>
-							<LineChart
-								data={ramChartData}
-								x="date"
-								y="value"
-								highlight={{ points: false, lines: true }}
-								height={210}
-								padding={defaultChartPadding({ top: 10, right: 12, bottom: 28, left: 52 })}
-								props={chartProps}
-							/>
+							<MetricLineChart points={ramChartData} unit="MB" />
 						</div>
 						<small class="mt-1 block text-[9px] text-muted-subtle">X: time · Y: RAM (MB)</small>
 					</div>

@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import 'layerchart/shadcn-svelte.css';
 
 @theme {
 	--color-canvas: #071312;
