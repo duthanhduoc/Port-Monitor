@@ -17,6 +17,12 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Use the repository's package manager consistently; the Tauri config currently calls `bun run` for dev/build, while `npm` scripts are available for validation.
 
+## Windows validation
+
+Native Windows development requires Bun, Rust with the MSVC toolchain, Microsoft C++ Build Tools with “Desktop development with C++”, and WebView2. Run `bun tauri build --debug --no-bundle` to validate the executable without requiring MSI/NSIS packaging. The `windows.yml` workflow performs this check on every pull request and push to `main`.
+
+Cargo build output contains absolute paths. If the repository is moved, run `cargo clean --manifest-path src-tauri/Cargo.toml` once before rebuilding.
+
 ## Change notes
 
 - Update the docs when a command contract, schema, status vocabulary or sampling policy changes.

@@ -9,7 +9,7 @@
 		type Time,
 		type UTCTimestamp
 	} from 'lightweight-charts';
-	import { onMount } from 'svelte';
+	import type { Attachment } from 'svelte/attachments';
 
 	export type ChartPoint = {
 		timestamp: number;
@@ -22,8 +22,6 @@
 	};
 
 	let { points, unit }: Props = $props();
-
-	let container: HTMLDivElement;
 	let chart: IChartApi | null = null;
 	let series: ISeriesApi<'Line'> | null = null;
 
@@ -38,10 +36,10 @@
 		return timeFormatter.format(new Date(timestamp * 1000));
 	}
 
-	function getChartData() {
+	function getChartData(dataPoints: ChartPoint[]) {
 		return [
 			...new Map(
-				points.map(({ timestamp, value }) => [
+				dataPoints.map(({ timestamp, value }) => [
 					timestamp,
 					{
 						time: timestamp as UTCTimestamp,
@@ -52,18 +50,9 @@
 		].sort((a, b) => Number(a.time) - Number(b.time));
 	}
 
-	function updateData() {
-		if (!series) return;
-
-		series.setData(getChartData());
-		chart?.timeScale().fitContent();
-	}
-
-	onMount(() => {
+	const attachChart: Attachment<HTMLDivElement> = (container) => {
 		const styles = getComputedStyle(document.documentElement);
-
 		const color = (name: string) => styles.getPropertyValue(name).trim();
-
 		chart = createChart(container, {
 			autoSize: true,
 
@@ -149,27 +138,24 @@
 			}
 		});
 
-		updateData();
-
 		return () => {
 			series = null;
-
 			chart?.remove();
 			chart = null;
 		};
-	});
+	};
 
-	$effect(() => {
-		// Track points
-		// eslint-disable-next-line @typescript-eslint/no-unused-expressions
-		points;
-
-		updateData();
-	});
+	function updateChart(dataPoints: ChartPoint[]): Attachment<HTMLDivElement> {
+		return () => {
+			series?.setData(getChartData(dataPoints));
+			chart?.timeScale().fitContent();
+		};
+	}
 </script>
 
 <div
-	bind:this={container}
+	{@attach attachChart}
+	{@attach updateChart(points)}
 	class="h-full min-h-0 w-full"
 	role="img"
 	aria-label={`Historical ${unit === '%' ? 'CPU' : 'RAM'} usage line chart`}

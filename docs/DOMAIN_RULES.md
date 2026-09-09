@@ -34,7 +34,7 @@ online → ended (process action; record remains configured)
 - Validate ports as integers in the inclusive range 1–65535.
 - Reject attempts to add a port that is already monitored.
 - Never terminate a process based solely on a port that has become offline.
-- Before termination, verify that the target PID is still the process associated with the monitored port when the platform permits it; handle PID reuse defensively.
+- The UI sends the PID that the user confirmed. Immediately before termination, verify that this expected PID is still associated with the monitored port; refuse the command if a replacement PID has taken over.
 - Permission errors and unsupported metrics are visible states, not silent fallbacks.
 - Removing a monitor record is separate from ending a process.
 

@@ -24,6 +24,9 @@ The first working implementation is now in the repository:
 - `src-tauri/src/lib.rs` owns SQLite migrations, port lookup, process metrics, sampling and Tauri commands.
 - `src/routes/+page.svelte` renders the port table, realtime updates, actions and inline SVG charts.
 - History is retained per monitored port for the latest 720 samples (about 24 minutes at a 2-second interval).
+- Each sampling cycle reads the socket table once, records inspection failures explicitly and commits its database updates in one transaction.
+- Process termination is guarded by the PID the user confirmed, so a replacement listener is never ended accidentally.
+- Windows builds are validated by a native Windows CI job in addition to local macOS validation.
 - `cargo check`, `cargo test`, `npm run check` and `npm run build` are the baseline validations.
 
 Platform-specific socket visibility and process permissions can still affect whether a PID or metric is available; those cases must stay visible as offline/error states.

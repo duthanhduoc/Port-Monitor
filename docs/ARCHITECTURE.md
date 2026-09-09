@@ -17,14 +17,14 @@ The Rust side owns OS inspection, sampling, persistence and process termination.
 ## Recommended Rust responsibilities
 
 - Validate and normalize port numbers.
-- Resolve the process listening on a port.
+- Read the OS socket table once per sampling cycle and resolve listeners for all monitored ports from that snapshot.
 - Read PID, process name, CPU and memory metrics using a maintained Rust system-process library or platform APIs.
 - Run one shared sampling loop at a configurable interval; do not create one unbounded timer per UI component.
 - Upsert the current observation for each monitored port.
 - Mark a port offline when lookup fails, while retaining the port record and history.
 - Re-resolve by port on every sampling cycle so a replacement process can reconnect with a new PID.
 - Expose small, serializable commands such as list ports, add port, remove port, end process and load history.
-- Emit a single realtime update event after a sampling cycle, or provide an equivalent subscription mechanism.
+- Emit a single realtime update event after a sampling cycle, including error observations when socket inspection fails.
 - Include the monitor application's own process metrics in the realtime snapshot.
 - On macOS, calculate app CPU by summing `sysinfo` CPU usage and app RAM with `proc_pid_rusage` physical footprint across every PID sharing the main process's resource coalition, falling back to the main process if grouping is unavailable; use main-process metrics on other platforms.
 
@@ -41,14 +41,15 @@ The Rust side owns OS inspection, sampling, persistence and process termination.
 
 Names are suggestions, not a requirement. Preserve the semantics if names change.
 
-| Operation               | Input                        | Result                                           |
-| ----------------------- | ---------------------------- | ------------------------------------------------ |
-| `list_monitored_ports`  | none                         | persisted port records with latest observation   |
-| `add_monitored_port`    | `port`, optional `name`      | created record; duplicate port returns an error  |
-| `remove_monitored_port` | `port_record_id`             | deleted record and intentionally deleted history |
-| `end_process`           | `port_record_id` or live PID | success/error; never deletes the port record     |
-| `get_metric_history`    | `port_record_id`, time range | ordered samples                                  |
-| `monitor:update` event  | snapshot list                | latest state for all monitored ports             |
+| Operation               | Input                          | Result                                                                     |
+| ----------------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| `list_monitored_ports`  | none                           | persisted port records with latest observation                             |
+| `add_monitored_port`    | `port`, optional `name`        | created record; duplicate port returns an error                            |
+| `remove_monitored_port` | `port_record_id`               | deleted record and intentionally deleted history                           |
+| `end_process`           | `port_record_id`, expected PID | success/error; refuses a replacement PID and never deletes the port record |
+| `get_metric_history`    | `port_record_id`, time range   | ordered samples                                                            |
+| `monitor:update` event  | snapshot list                  | latest state for all monitored ports                                       |
+| `monitor:error` event   | error message                  | sampling/database failure surfaced without deleting current UI state       |
 
 The exact serialization format should be documented in code beside the command definitions and covered by tests.
 
@@ -76,3 +77,5 @@ process_samples
 ```
 
 Use a migration mechanism from the beginning. Add an index on `(monitored_port_id, observed_at)` and prune samples only through an explicit retention policy, never as a side effect of a process dying.
+
+SQLite uses WAL mode, a bounded busy timeout and one transaction per sampling cycle so UI commands and background sampling can safely share the database on macOS and Windows.

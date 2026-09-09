@@ -12,7 +12,7 @@
 		name: string | null;
 		pid: number | null;
 		processName: string | null;
-		status: 'online' | 'offline' | string;
+		status: 'online' | 'offline' | 'error' | 'permission_denied';
 		cpuPercent: number | null;
 		memoryBytes: number | null;
 		observedAt: number | null;
@@ -44,13 +44,17 @@
 	let confirmingAction = $state<string | null>(null);
 	let message = $state('');
 	let error = $state('');
+	let monitorError = $state('');
 	let appMetrics = $state<AppMetrics>({ cpuPercent: null, memoryBytes: null });
 	let messageTimer: ReturnType<typeof setTimeout> | undefined;
+	let historyRequest = 0;
 
 	const selected = $derived(
 		monitors.find((monitor) => monitor.id === selectedId) ?? monitors[0] ?? null
 	);
 	const onlineCount = $derived(monitors.filter((monitor) => monitor.status === 'online').length);
+	const offlineCount = $derived(monitors.filter((monitor) => monitor.status === 'offline').length);
+	const errorCount = $derived(monitors.length - onlineCount - offlineCount);
 	const cpuChartData = $derived(
 		history
 			.filter((sample) => sample.cpuPercent !== null)
@@ -79,8 +83,10 @@
 	}
 
 	async function loadHistory(id: number) {
+		const request = ++historyRequest;
 		try {
-			history = await invoke<Sample[]>('get_metric_history', { id });
+			const samples = await invoke<Sample[]>('get_metric_history', { id });
+			if (request === historyRequest && id === selectedId) history = samples;
 		} catch (cause) {
 			error = String(cause);
 		}
@@ -131,7 +137,7 @@
 		error = '';
 		actingId = monitor.id;
 		try {
-			await invoke('end_process', { id: monitor.id });
+			await invoke('end_process', { id: monitor.id, expectedPid: monitor.pid });
 			showMessage(`End command sent to PID ${monitor.pid}`);
 			await loadMonitors();
 		} catch (cause) {
@@ -153,8 +159,12 @@
 		try {
 			monitors = await invoke<Monitor[]>('remove_monitored_port', { id: monitor.id });
 			selectedId = monitors[0]?.id ?? null;
-			history =
-				selectedId === null ? [] : await invoke<Sample[]>('get_metric_history', { id: selectedId });
+			if (selectedId === null) {
+				historyRequest++;
+				history = [];
+			} else {
+				await loadHistory(selectedId);
+			}
 		} catch (cause) {
 			error = String(cause);
 		} finally {
@@ -204,19 +214,47 @@
 	function formatChartTime(value: Date) {
 		return timeFormatter.format(value);
 	}
+	function statusLabel(status: Monitor['status']) {
+		if (status === 'online') return 'ONLINE';
+		if (status === 'offline') return 'OFFLINE';
+		if (status === 'permission_denied') return 'NO ACCESS';
+		return 'ERROR';
+	}
+	function statusTextClass(status: Monitor['status']) {
+		return status === 'online' ? 'text-success' : 'text-danger';
+	}
+	function statusDotClass(status: Monitor['status']) {
+		return status === 'online'
+			? 'bg-success shadow-success-glow'
+			: 'bg-danger-dot shadow-danger-glow';
+	}
 
 	onMount(() => {
-		let unlisten: UnlistenFn | undefined;
+		let unlistenUpdate: UnlistenFn | undefined;
+		let unlistenError: UnlistenFn | undefined;
+		let disposed = false;
 		void (async () => {
-			await loadMonitors();
-			unlisten = await listen<MonitorSnapshot>('monitor:update', async (event) => {
+			unlistenUpdate = await listen<MonitorSnapshot>('monitor:update', async (event) => {
 				monitors = event.payload.monitors;
 				appMetrics = event.payload.appMetrics;
+				monitorError = '';
 				if (selectedId !== null) await loadHistory(selectedId);
 			});
+			unlistenError = await listen<string>('monitor:error', (event) => {
+				monitorError = event.payload;
+			});
+			if (disposed) {
+				unlistenUpdate();
+				unlistenError();
+				return;
+			}
+			await loadMonitors();
 		})();
 		return () => {
-			unlisten?.();
+			disposed = true;
+			historyRequest++;
+			unlistenUpdate?.();
+			unlistenError?.();
 			if (messageTimer) clearTimeout(messageTimer);
 		};
 	});
@@ -248,24 +286,36 @@
 						></span
 					>
 				</div>
-				<div class="pt-2 text-[11px] tracking-[0.1em] text-primary">
+				<div
+					class={[
+						'pt-2 text-[11px] tracking-[0.1em]',
+						errorCount > 0 || monitorError ? 'text-danger' : 'text-primary'
+					]}
+				>
 					<span
-						class="mr-1.5 inline-block size-1.5 rounded-full bg-success align-middle shadow-success-glow"
+						class={[
+							'mr-1.5 inline-block size-1.5 rounded-full align-middle',
+							errorCount > 0 || monitorError
+								? 'bg-danger-dot shadow-danger-glow'
+								: 'bg-success shadow-success-glow'
+						]}
 					></span>
-					LIVE <small class="ml-1.5 tracking-normal text-muted-subtle">every 2 seconds</small>
+					{errorCount > 0 || monitorError ? 'DEGRADED' : 'LIVE'}
+					<small class="ml-1.5 tracking-normal text-muted-subtle">every 2 seconds</small>
 				</div>
 			</div>
 		</header>
 
 		<section
-			class="my-6 grid grid-cols-3 overflow-hidden rounded border border-border bg-surface-raised/75"
+			class="my-6 grid grid-cols-4 overflow-hidden rounded border border-border bg-surface-raised/75 max-[600px]:grid-cols-2"
 			aria-label="Overview"
 		>
-			{#each [['MONITORED', monitors.length, 'port records'], ['RUNNING', onlineCount, 'processes online'], ['OFFLINE', monitors.length - onlineCount, 'records retained']] as stat, index (stat[0])}
+			{#each [['MONITORED', monitors.length, 'port records'], ['RUNNING', onlineCount, 'processes online'], ['OFFLINE', offlineCount, 'records retained'], ['ERRORS', errorCount, 'inspection failures']] as stat, index (stat[0])}
 				<div
 					class={[
 						'flex min-w-0 items-center justify-between gap-3 px-5 py-3',
-						index > 0 && 'border-l border-border',
+						index > 0 && index !== 2 && 'border-l border-border',
+						index >= 2 && 'max-[600px]:border-t max-[600px]:border-border',
 						index === 1 && 'bg-primary/10'
 					]}
 				>
@@ -329,6 +379,11 @@
 						class="mx-[22px] mt-3 rounded bg-danger-surface px-3 py-2 text-[11px] break-words text-danger max-[480px]:mx-3"
 					>
 						{error}
+					</div>{/if}
+				{#if monitorError}<div
+						class="mx-[22px] mt-3 rounded bg-danger-surface px-3 py-2 text-[11px] break-words text-danger max-[480px]:mx-3"
+					>
+						Monitoring error: {monitorError}
 					</div>{/if}
 				<div>
 					<table class="w-full border-collapse text-left">
@@ -438,22 +493,20 @@
 										><span
 											class={[
 												'inline-flex items-center text-[10px] whitespace-nowrap',
-												monitor.status === 'online' ? 'text-success' : 'text-danger'
+												statusTextClass(monitor.status)
 											]}
 											><i
 												class={[
 													'mr-1.5 inline-block size-1.5 rounded-full',
-													monitor.status === 'online'
-														? 'bg-success shadow-success-glow'
-														: 'bg-danger-dot shadow-danger-glow'
+													statusDotClass(monitor.status)
 												]}
-											></i>{monitor.status === 'online' ? 'ONLINE' : 'OFFLINE'}</span
+											></i>{statusLabel(monitor.status)}</span
 										></td
 									>
 									<td
 										class="border-b border-border-row px-3 py-[15px] pr-[18px] text-right align-middle"
 										><div class="flex flex-wrap justify-end gap-2">
-											{#if monitor.pid && confirmingAction !== `remove:${monitor.id}`}<button
+											{#if monitor.status === 'online' && monitor.pid && confirmingAction !== `remove:${monitor.id}`}<button
 													class="rounded border border-danger-border bg-danger-control px-3 py-2 text-[10px] font-bold tracking-[0.08em] text-danger-foreground transition hover:border-danger hover:bg-danger-hover hover:text-white hover:shadow-danger-action focus-visible:outline-2 focus-visible:outline-danger disabled:cursor-wait disabled:opacity-60"
 													type="button"
 													disabled={actingId === monitor.id}
@@ -530,19 +583,13 @@
 								{selected.name ?? selected.processName ?? 'Unnamed'}
 							</p>
 						</div>
-						<span
-							class={[
-								'pt-1 text-[10px]',
-								selected.status === 'online' ? 'text-success' : 'text-danger'
-							]}
+						<span class={['pt-1 text-[10px]', statusTextClass(selected.status)]}
 							><i
 								class={[
 									'mr-1.5 inline-block size-1.5 rounded-full',
-									selected.status === 'online'
-										? 'bg-success shadow-success-glow'
-										: 'bg-danger-dot shadow-danger-glow'
+									statusDotClass(selected.status)
 								]}
-							></i>{selected.status === 'online' ? 'ONLINE' : 'OFFLINE'}</span
+							></i>{statusLabel(selected.status)}</span
 						>
 					</div>
 					<div
